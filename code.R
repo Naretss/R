@@ -1,0 +1,141 @@
+
+install.packages("ggplot2")
+library(tidyverse)
+library(ggplot2)
+DATASET <- read.csv(file="spambase.csv") #ทำการแก้ไขคอลัมสุดท้ายใน excel 1 เป็น spam และ 0 เป็น อีเมล์ก่อนนำข้อมูลเข้า
+
+#1 -----------------------------------------------------------------------------------------
+DATASET$wordFreq.sumAll <- rowSums(subset(DATASET,select=1:43))
+#trend  ยิ่งตัวพิมใหญ่มีลำดับที่เรียงกันมาก ค่าเฉลียของตัวอักษรตัวใหญ่ยิ่งมาก
+ggplot(data = DATASET) +
+  geom_smooth(mapping = aes(x =  Capital_run_length_average , y =  Capital_run_length_longest ))
+
+
+#bar  Spam 1812  email  2785
+ggplot(data = DATASET) + ggtitle("                       Email   vs   Spam") +
+  geom_bar(mapping = aes(x = Spam),fill  = "blue") 
+  
+#Scatter plot ไม่มีการกระจายตัวกันมากนัก
+plot(x = DATASET$Capital_run_length_average ,y = DATASET$Capital_run_length_longest,
+     xlab = "Capital_run_length_average",
+     ylab = "Capital_run_length_longest",
+     xlim = c(0,3),
+     ylim = c(0,20),		 
+     main = "Capital_run_length_average vs Capital_run_length_longest" )
+
+#2-------------------------------------------
+
+result <- table(DATASET$Spam)
+isSpam <- result[["1"]]    #หาจำนวนที่เป็น 1 จากคอลัม Spam
+notSpam <- result[["0"]]   #หาจำนวนที่เป็น0 จากคอลัม Spam
+print(paste0("Percentage spam : ", round((isSpam/nrow(DATASET)) * 100, 2), "%"))  
+#ทำการแสดงเปอร์เซ็น 2 คือทศนิยมสองตำแหน่ round ปัดเศษค่าในอาร์กิวเมนต์แรกเป็นจำนวนทศนิยมที่ระบุ
+print(paste0("Percentage email : ", round((notSpam/nrow(DATASET)) * 100, 2), "%"))
+summary(DATASET$Capital_run_length_total)
+sd(DATASET$Capital_run_length_total)
+
+summary(DATASET$wordFreq.sumAll)
+sd(DATASET$wordFreq.sumAll)
+
+#3-------------------------------------------
+#ของอีเมล์และสแปบจำนวนตัวอักษรทั้งหมดจะอยู่ที่ช่วง 266 - 301 ตัว
+n = length(DATASET$Capital_run_length_total)
+sigma = sd(DATASET$Capital_run_length_total)
+sem = sigma/sqrt(n)
+sem # standard error of the mean
+E = qnorm(0.975)*sem
+E # margin of error
+mean(DATASET$Capital_run_length_total)+ c(-E,E)
+
+#4-------------------------------------------
+
+
+#เมื่อจำนวนตัวอักษรของอีเมล์ทั้งหมดมีค่าเฉลี่ยของจำนวนตัวอักษรมากกว่า 300 ตัว จาก
+#จํานวน 4597 อีเมล์ เราพบว่าจำนวนตัวอักษรเฉลี่ยเท่ากับ 280 ตัว ถ้าสมมติว่าส่วนเบี่ยงเบนมาตรฐานประชากรเท่ากับประชากรเท่ากับ 606 ตัว ที่ระดับนัยสําคัญ 0.05 เราสามารถปฏิเสธค่าเฉลี่ยของจำนวนตัวอักษรมากกว่า 300ตัวได้ไหม
+?
+xbar = 280 # sample mean
+mu0 = 300 # hypothesized value
+sigma = sd(DATASET$Capital_run_length_total)
+n = 4597
+z = (xbar-mu0)/(sigma/sqrt(n))
+z # test statistic
+### Compute Critical value
+alpha = .05
+z.alpha = qnorm(1-alpha)
+-z.alpha # critical value
+### Compute p-value
+pval = pnorm(z)
+pval  #ยอมรับ H0
+
+
+
+#5 -------------------------------------------
+#K Means Clustering in R
+
+
+library(ggplot2)
+ggplot(DATASET, aes(DATASET$Capital_run_length_total , DATASET$Capital_run_length_longest , color = Spam)) + geom_point()
+set.seed(20)
+dataCluster <- kmeans(DATASET[, 56:57], 3, nstart = 20)
+dataCluster
+
+table(dataCluster$cluster, DATASET$Spam) #ตารางเปรียบเทียบจ านวนข้อมูลในแต่ละกลุ่ม กับจ านวนข้อมูลในแต่ละสายพันธุ์ คล้ายกับตาราง confusion matrix
+
+dataCluster$cluster <- as.factor(dataCluster$cluster)
+ggplot(DATASET, aes(Capital_run_length_total, Capital_run_length_longest, color = dataCluster$cluster)) + geom_point()
+
+#-----------------------------------------------
+#Decision Tree
+library(rpart)
+library(caret)
+
+data(iris)
+
+idxs <- sample(1:nrow(DATASET),as.integer(0.7*nrow(DATASET)))
+trainIris <- DATASET[idxs,]
+cdt <- ctree(Spam ~ ., trainIris)
+plot(cdt,type="simple")
+
+dtree <- rpart(Spam~., DATASET)
+p <- predict(dtree, type="class")
+confusionMatrix(p, DATASET$Spam)
+
+
+#-----------------------------------------------
+#Na??ve Bayes
+install.packages("e1071")
+library(e1071)
+
+## Split in train + test set
+idxs <- sample(1:nrow(DATASET),as.integer(0.7*nrow(DATASET)))
+trainIris <- DATASET[idxs,] #สร้างตัวtrainจากข้อมูล70%
+testIris <- DATASET[-idxs,] #สร้างตัวtestข้อมูล
+
+## Create Naive Bayes Model
+model <- naiveBayes(Spam ~ ., trainIris) #สร้างโมเดิลจากอัลกอริทึม naiveBayes
+class(model)    
+summary(model)  #แสดงค่าทางสถิตต่างๆใน model
+print(model)    
+
+preds <- predict(model, newdata = testIris) #ฟังชันก์ทำนายข้อมูล
+conf_matrix <- table(preds, testIris$Spam) #นำค่าทำนายข้อมูลไว้ใน conf_matrix
+# load Caret package for computing Confusion matrix
+library(caret)
+confusionMatrix(conf_matrix)
+
+
+#j48
+
+library(caTools)
+
+library(RWeka)
+spl = sample.split(DATASET$Spam, SplitRatio = 0.7)
+
+dataTrain = subset(DATASET, spl==TRUE)
+dataTest = subset(DATASET, spl==FALSE)
+
+resultJ48 <- J48(as.factor(Spam)~., dataTrain) 
+dataTest.pred <- predict(resultJ48, newdata = dataTest)
+T_1 <- table(dataTest$Spam, dataTest.pred)
+library(caret)
+confusionMatrix(T_1)
